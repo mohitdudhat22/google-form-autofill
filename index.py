@@ -5,7 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-def fill_google_form(form_url):
+def fill_google_form(form_url, data_dict):
     # Set up the WebDriver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service)
@@ -19,36 +19,45 @@ def fill_google_form(form_url):
             EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text']"))
         )
 
-        # Print all questions
+        # Print all questions and map fields
         questions = driver.find_elements(By.CSS_SELECTOR, "span.M7eMe")
-        print(questions)
-        for idx, question in enumerate(questions):
-            print(f"Question {idx+1}: {question.text}")
+        print("Questions:")
+        question_texts = [question.text for question in questions]
+        for idx, text in enumerate(question_texts):
+            print(f"Question {idx+1}: {text}")
 
-        # Fill out text fields
-        text_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text']")
-        for i, input_field in enumerate(text_inputs):
-            input_field.send_keys(f"Answer {i+1}")
+        # Fill out fields based on the dictionary
+        for field_name, field_value in data_dict.items():
+            found = False
+            for question in questions:
+                if field_name.lower() in question.text.lower():
+                    found = True
+                    if "position" in field_name.lower():  # Handle MCQ
+                        # Find radio buttons
+                        radio_buttons = driver.find_elements(By.CSS_SELECTOR, "div[role='radio']")
+                        print(f"Radio Buttons for '{field_name}': {len(radio_buttons)}")
+                        for button in radio_buttons:
+                            aria_label = button.get_attribute("aria-label")
+                            if field_value.lower() in aria_label.lower():
+                                # Scroll into view and click the option
+                                driver.execute_script("arguments[0].scrollIntoView();", button)
+                                button.click()
+                                break
+                    else:
+                        input_fields = driver.find_elements(By.CSS_SELECTOR, "input[type='text']")
+                        for field in input_fields:
+                            if not field.get_attribute("value"):  # Fill only empty fields
+                                field.send_keys(field_value)
+                                break
+                    break
 
-        # Fill out text areas
-        text_areas = driver.find_elements(By.CSS_SELECTOR, "textarea")
-        for i, text_area in enumerate(text_areas):
-            text_area.send_keys(f"Long Answer {i+1}")
-
-        # Select radio buttons (selects the first option for each question)
-        radio_buttons = driver.find_elements(By.CSS_SELECTOR, "input[type='radio']")
-        for button in radio_buttons:
-            if button.get_attribute("name") not in [rb.get_attribute("name") for rb in radio_buttons[:radio_buttons.index(button)]]:
-                button.click()
-
-        # Select checkboxes (selects the first option for each question)
-        checkboxes = driver.find_elements(By.CSS_SELECTOR, "input[type='checkbox']")
-        for checkbox in checkboxes:
-            if checkbox.get_attribute("name") not in [cb.get_attribute("name") for cb in checkboxes[:checkboxes.index(checkbox)]]:
-                checkbox.click()
+            if not found:
+                print(f"Field '{field_name}' not found in the form.")
 
         # Submit the form
-        submit_button = driver.find_element(By.CSS_SELECTOR, "div[role='button']")
+        submit_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "div[role='button']"))
+        )
         submit_button.click()
 
         print("Form submitted successfully!")
@@ -61,5 +70,10 @@ def fill_google_form(form_url):
         driver.quit()
 
 # Usage
-# form_url = input("Please enter the Google Form URL: ")
-fill_google_form("https://forms.gle/jXN6mFwsGyie9qGL9")
+form_url = "https://forms.gle/jXN6mFwsGyie9qGL9"
+data_dict = {
+    "Name": "Mohit Dudhat",
+    "Phone Number": "9913239031",
+    "Position": "Full Stack Developer"  # MCQ field
+}
+fill_google_form(form_url, data_dict)
